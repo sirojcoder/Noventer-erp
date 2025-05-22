@@ -1,9 +1,8 @@
-
-
 import React, { useEffect, useState } from 'react';
 import { FaTrash, FaEdit } from 'react-icons/fa';
 import SmenaQoshish from '../components/SmenaQoshish';
-import ConfirmModal from '../components/ConfirmModal'; 
+import ConfirmModal from '../components/ConfirmModal';
+import SmenaUpdate from '../components/SmenaUpdate';
 
 interface Branch {
   branch: number;
@@ -26,16 +25,20 @@ const Smenalar: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-
- 
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-
   const [editingSmena, setEditingSmena] = useState<Smena | null>(null);
+  const [shift_id, setShift_id] = useState<number | null>(null);
 
-
-
-
+  const fetchSmenalar = () => {
+    const branchId = selectedBranch || '1';
+    fetch(`https://api.noventer.uz/api/v1/company/shifts/${branchId}/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then((data: Smena[]) => setSmenalar(data))
+      .catch(err => console.error('Smenalarni olishda xatolik:', err));
+  };
 
   useEffect(() => {
     fetch('https://api.noventer.uz/api/v1/company/clients/', {
@@ -50,18 +53,14 @@ const Smenalar: React.FC = () => {
   }, [token]);
 
   useEffect(() => {
-    const branchId = selectedBranch || '1';
-    fetch(`https://api.noventer.uz/api/v1/company/shifts/${branchId}/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => res.json())
-      .then((data: Smena[]) => setSmenalar(data))
-      .catch(err => console.error('Smenalarni olishda xatolik:', err));
+    fetchSmenalar();
   }, [token, selectedBranch]);
 
-  const handleAddSmena = (newSmena: Smena) => {
-    setSmenalar(prev => [...prev, newSmena]);
+  const handleAddSmena = () => {
     setIsModalOpen(false);
+    setEditingSmena(null);
+    setShift_id(null);
+    fetchSmenalar(); // qayta chizish
   };
 
   const startDeleteSmena = (id: number) => {
@@ -71,6 +70,7 @@ const Smenalar: React.FC = () => {
 
   const confirmDelete = () => {
     if (deleteId === null) return;
+
     fetch(`https://api.noventer.uz/api/v1/company/shift-detail/${deleteId}/`, {
       method: 'DELETE',
       headers: {
@@ -79,16 +79,15 @@ const Smenalar: React.FC = () => {
     })
       .then(res => {
         if (res.ok) {
-          setSmenalar(prev => prev.filter(smena => smena.id !== deleteId));
+          fetchSmenalar();
           setConfirmVisible(false);
           setDeleteId(null);
         } else {
-          alert('Smena o‘chirilmadi. Iltimos, qayta urinib ko‘ring.');
+          alert("Smena o‘chirilmadi. Iltimos, qayta urinib ko‘ring.");
         }
       })
       .catch(() => alert('Server bilan bog‘lanishda xatolik yuz berdi.'));
   };
-
 
   const cancelDelete = () => {
     setConfirmVisible(false);
@@ -103,24 +102,26 @@ const Smenalar: React.FC = () => {
     <div className="pt-[56px] pl-[250px] p-6 mt-7">
       <div className="flex justify-between items-center mb-6">
         <button
-          type="button"
-          className="bg-blue-600 !text-white px-4 !text-[14px] py-2 rounded-md shadow hover:bg-blue-700 transition"
-          onClick={() => setIsModalOpen(true)}
+          className="bg-blue-600 !text-white px-4 text-sm py-2 rounded-md shadow hover:bg-blue-700"
+          onClick={() => {
+            setIsModalOpen(true);
+            setEditingSmena(null);
+            setShift_id(null);
+          }}
         >
-         + Smena qo'shish
+          + Smena qo‘shish
         </button>
 
         <select
-          className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 rounded-md px-3 py-2"
           value={selectedBranch}
           onChange={e => setSelectedBranch(e.target.value)}
         >
           <option value="">Filial tanlang</option>
           {branches
-            .filter(
-              (branch, index, self) =>
-                branch.branch !== null &&
-                index === self.findIndex(b => b.branch === branch.branch)
+            .filter((branch, index, self) =>
+              branch.branch !== null &&
+              index === self.findIndex(b => b.branch === branch.branch)
             )
             .map(branch => (
               <option key={branch.branch} value={branch.branch.toString()}>
@@ -140,7 +141,7 @@ const Smenalar: React.FC = () => {
               <th className="py-3 px-6 text-left">Boshlanish vaqti</th>
               <th className="py-3 px-6 text-left">Tugash vaqti</th>
               <th className="py-3 px-6 text-left">Filial</th>
-              
+              <th className="py-3 px-6 text-center">Amallar</th>
             </tr>
           </thead>
           <tbody>
@@ -151,24 +152,22 @@ const Smenalar: React.FC = () => {
                   <td className="py-3 px-6">{smena.start_time}</td>
                   <td className="py-3 px-6">{smena.end_time}</td>
                   <td className="py-3 px-6">{smena.branch_name}</td>
-                  <td className="py-3 px-6 flex gap-5 justify-center  text-center space-x-4">
-                  <button
-              onClick={() => {
-                setEditingSmena(smena); 
-                setIsModalOpen(true);   
-              }}
-              className="border border-blue-500 p-1 rounded-lg"
-              aria-label="Edit"
-            >
-              <FaEdit color="blue" />
-            </button>
-
+                  <td className="py-3 px-6 flex gap-4 justify-center">
                     <button
-                      className="text-red-600  border p-1 rounded-lg border border-red-500 "
-                      aria-label="Delete"
-                      onClick={() => startDeleteSmena(smena.id)}
+                      onClick={() => {
+                        setShift_id(smena.id);
+                        setEditingSmena(smena);
+                        setIsModalOpen(true);
+                      }}
+                      className="border border-blue-500 p-1 rounded"
                     >
-                      <FaTrash color='red' />
+                      <FaEdit color="blue" />
+                    </button>
+                    <button
+                      onClick={() => startDeleteSmena(smena.id)}
+                      className="border border-red-500 p-1 rounded"
+                    >
+                      <FaTrash color="red" />
                     </button>
                   </td>
                 </tr>
@@ -176,7 +175,7 @@ const Smenalar: React.FC = () => {
             ) : (
               <tr>
                 <td colSpan={5} className="text-center py-4 text-gray-500">
-                  Ma'lumot topilmadi
+                  Ma’lumot topilmadi
                 </td>
               </tr>
             )}
@@ -184,21 +183,37 @@ const Smenalar: React.FC = () => {
         </table>
       </div>
 
-      {isModalOpen && (
-        <SmenaQoshish
+      {/* Modal oynalar */}
+      {isModalOpen && shift_id ? (
+        <SmenaUpdate
           visible={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingSmena(null);
+            setShift_id(null);
+          }}
           onAdd={handleAddSmena}
           filiallar={branches}
+          shift_id={shift_id}
         />
+      ) : (
+        isModalOpen && (
+          <SmenaQoshish
+            visible={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onAdd={handleAddSmena}
+            filiallar={branches}
+          />
+        )
       )}
 
-     
+      {/* Delete confirmation modal */}
       <ConfirmModal
         visible={confirmVisible}
-        message="Rostanham o'chirmoqchimisiz?"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
+        description="Ushbu smenani o‘chirishni hohlaysizmi?"
+        title="O‘chirishni tasdiqlang"
       />
     </div>
   );
